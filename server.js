@@ -4,27 +4,31 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 
+// If Node < 18, uncomment the shim and `npm i node-fetch`
+// const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
+
 const app = express();
+
+// Serve static files (index.html + quicksquad-chat-widget.js) from project root
+app.use(express.static(path.join(__dirname)));
 
 app.use(cors({ origin: true }));
 app.use(express.json({ limit: "1mb" }));
 
-// Serve static files from "public" folder
-app.use(express.static(path.join(__dirname, "public")));
-
-// Optional index route
-app.get("/", (_req, res) =>
-  res.sendFile(path.join(__dirname, "index.html"))
-);
-
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const MODEL = process.env.OPENAI_MODEL || "gpt-3.5-turbo";
 
-// Your /quicksquad-ai route remains unchanged...
+// Early validation helps avoid mysterious 500s
+if (!OPENAI_API_KEY) {
+  console.warn("[WARN] OPENAI_API_KEY is missing. Set it in .env");
+}
+
 app.post("/quicksquad-ai", async (req, res) => {
   console.log("> POST /quicksquad-ai", new Date().toISOString());
   try {
     const { messages = [] } = req.body || {};
+
+    // Simple guardrail
     const guard = (messages[messages.length - 1]?.content || "").toLowerCase();
     if (guard.includes("password") && guard.includes("share")) {
       return res.status(400).json({
@@ -39,6 +43,7 @@ app.post("/quicksquad-ai", async (req, res) => {
         .json({ reply: "Server misconfig: API key not set." });
     }
 
+    // Call OpenAI
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -61,7 +66,7 @@ app.post("/quicksquad-ai", async (req, res) => {
 
     if (!r.ok) {
       const txt = await r.text().catch(() => "");
-      console.error("[OpenAI error]", r.status, txt);
+      console.error("[OpenAI error]", r.status, txt); // <- this tells you EXACTLY why
       return res.status(500).json({ reply: `Upstream error (${r.status}).` });
     }
 
@@ -75,6 +80,9 @@ app.post("/quicksquad-ai", async (req, res) => {
     res.status(500).json({ reply: "Server issue — please try again shortly." });
   }
 });
+
+// Optional index route
+app.get("/", (_req, res) => res.sendFile(path.join(__dirname, "index.html")));
 
 const PORT = process.env.PORT || 8082;
 app.listen(PORT, () =>
