@@ -11,8 +11,12 @@ const app = express();
 
 // Serve static files (index.html + quicksquad-chat-widget.js) from project root
 app.use(express.static(path.join(__dirname)));
+app.use(cors({
+  origin: ["https://quicksquad.live","http://localhost:8080"], // replace with your real domain
+  credentials: true
+}));
 
-app.use(cors({ origin: true }));
+// app.use(cors({ origin: true }));
 app.use(express.json({ limit: "1mb" }));
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
